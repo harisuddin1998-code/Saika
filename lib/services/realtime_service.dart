@@ -1,7 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'supabase_config.dart';
 
 class RealtimeEvent {
   final String type;
@@ -11,63 +13,32 @@ class RealtimeEvent {
 
 enum ConnectionStatus { connecting, connected, disconnected }
 
-/// Client for the local realtime relay in server/bin/server.dart. Lets the
-/// rider, driver, and admin apps see each other's actions live during the
-/// demo without a cloud backend — start the server once, all three apps
-/// connect to it over a plain WebSocket.
+/// Realtime backbone for the rider, driver, and admin apps — backed by
+/// Saika's own Supabase project (Realtime broadcast for live messages, a
+/// few Postgres tables for anything that needs to survive a reconnect).
+/// Same public shape as the old Deno-relay WebSocket client it replaced, so
+/// none of the screens that call `send`/`sendReliably`/`events` had to
+/// change.
 class RealtimeService {
   RealtimeService._();
   static final RealtimeService instance = RealtimeService._();
 
-  /// Whatever host the page itself was loaded from — so a phone that opens
-  /// http://192.168.x.x:5001 talks to the relay at that same LAN IP
-  /// automatically, with no manual config. Override only if that guess is
-  /// ever wrong (e.g. running outside a browser).
-  static String host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
-  static const int port = 8090;
+  static const String _channelName = 'saika-relay';
+  static const String _broadcastEvent = 'msg';
 
-  /// Hostname of the relay once it's deployed publicly (e.g. Render), used
-  /// when the app itself is served from a public domain like GitHub Pages
-  /// rather than localhost or a LAN IP — those two can't reach each other
-  /// with a plain `ws://host:8090` guess. Filled in after the relay is
-  /// deployed; empty means "not deployed yet, LAN/localhost only".
-  static const String prodRelayHost =
-      'prime-coyote-5642.harisuddin1998-code.deno.net';
-
-  static bool get _isLocalOrLan =>
-      host == 'localhost' ||
-      host == '127.0.0.1' ||
-      RegExp(r'^(10\.|172\.(1[6-9]|2\d|3[0-1])\.|192\.168\.)').hasMatch(host);
-
-  /// Native builds (the installed APK) have no meaningful page origin —
-  /// `Uri.base` only reflects a real address on web — so they always talk
-  /// to the deployed relay directly instead of guessing from `host`.
-  static Uri get _relayUri {
-    if (kIsWeb) {
-      if (!_isLocalOrLan && prodRelayHost.isNotEmpty) {
-        return Uri.parse('wss://$prodRelayHost/ws');
-      }
-      return Uri.parse('ws://$host:$port/ws');
-    }
-    return Uri.parse('wss://$prodRelayHost/ws');
-  }
-
-  /// HTTP(S) base for plain REST calls (e.g. registration) to the same relay.
-  static String get relayHttpBase {
-    if (kIsWeb && _isLocalOrLan) return 'http://$host:$port';
-    return 'https://$prodRelayHost';
-  }
-
-  WebSocketChannel? _channel;
-  StreamSubscription? _sub;
+  RealtimeChannel? _channel;
   Timer? _retryTimer;
   String _role = 'unknown';
   bool _manuallyClosed = false;
 
   final _controller = StreamController<RealtimeEvent>.broadcast();
-  final ValueNotifier<ConnectionStatus> status = ValueNotifier(ConnectionStatus.disconnected);
+  final ValueNotifier<ConnectionStatus> status = ValueNotifier(
+    ConnectionStatus.disconnected,
+  );
 
   Stream<RealtimeEvent> get events => _controller.stream;
+
+  SupabaseClient get _client => SupabaseConfig.client;
 
   void connect(String role) {
     _role = role;
@@ -75,44 +46,111 @@ class RealtimeService {
     _open();
   }
 
-  void _open() {
+  Future<void> _open() async {
     _retryTimer?.cancel();
     status.value = ConnectionStatus.connecting;
     try {
-      final channel = WebSocketChannel.connect(_relayUri);
+      await SupabaseConfig.ensureInitialized();
+      final channel = _client.channel(_channelName);
       _channel = channel;
-      _sub = channel.stream.listen(
-        _onMessage,
-        onDone: _onDropped,
-        onError: (Object _) => _onDropped(),
-        cancelOnError: true,
-      );
+      channel
+          .onBroadcast(
+            event: _broadcastEvent,
+            callback: (payload) {
+              final type = payload['type'] as String? ?? '';
+              final data =
+                  (payload['payload'] as Map?)?.cast<String, dynamic>() ??
+                  <String, dynamic>{};
+              _controller.add(RealtimeEvent(type, data));
+            },
+          )
+          .onPresenceSync((_) => _emitPresence())
+          .subscribe((subStatus, error) async {
+            if (subStatus == RealtimeSubscribeStatus.subscribed) {
+              status.value = ConnectionStatus.connected;
+              try {
+                await channel.track({'role': _role});
+              } catch (_) {
+                // Presence is a nice-to-have — don't let it block a
+                // successful connection.
+              }
+              await _emitStateSnapshot();
+            } else if (subStatus == RealtimeSubscribeStatus.channelError ||
+                subStatus == RealtimeSubscribeStatus.timedOut ||
+                subStatus == RealtimeSubscribeStatus.closed) {
+              _onDropped();
+            }
+          });
     } catch (_) {
       _onDropped();
     }
   }
 
-  void _onMessage(dynamic raw) {
-    status.value = ConnectionStatus.connected;
+  Future<void> _emitStateSnapshot() async {
     try {
-      final msg = jsonDecode(raw as String) as Map<String, dynamic>;
-      final type = msg['type'] as String? ?? '';
-      final payload = (msg['payload'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
-      if (type == 'state_snapshot') {
-        send('hello', {'role': _role});
+      final requestsRes = await _client
+          .from('active_ride_requests')
+          .select('payload')
+          .order('created_at');
+      final sosRes = await _client
+          .from('active_sos')
+          .select('payload')
+          .order('created_at');
+      final offersRes = await _client
+          .from('ride_offers')
+          .select('request_id, payload');
+
+      final activeRequests = (requestsRes as List)
+          .map((r) => (r as Map)['payload'])
+          .toList();
+      final activeSos = (sosRes as List)
+          .map((r) => (r as Map)['payload'])
+          .toList();
+
+      final offersByRequest = <String, List<dynamic>>{};
+      for (final row in (offersRes as List)) {
+        final m = row as Map;
+        final requestId = m['request_id'] as String;
+        (offersByRequest[requestId] ??= []).add(m['payload']);
       }
-      _controller.add(RealtimeEvent(type, payload));
+
+      _controller.add(
+        RealtimeEvent('state_snapshot', {
+          'activeRequests': activeRequests,
+          'activeSos': activeSos,
+          'offers': offersByRequest,
+        }),
+      );
     } catch (_) {
-      // Ignore malformed frames rather than crashing the demo.
+      // Best-effort — the app still works off live broadcasts even if the
+      // initial snapshot fetch fails.
     }
+  }
+
+  void _emitPresence() {
+    final channel = _channel;
+    if (channel == null) return;
+    final counts = <String, int>{};
+    for (final entry in channel.presenceState()) {
+      for (final p in entry.presences) {
+        final role = p.payload['role'] as String? ?? 'unknown';
+        counts[role] = (counts[role] ?? 0) + 1;
+      }
+    }
+    final total = counts.values.fold<int>(0, (a, b) => a + b);
+    _controller.add(
+      RealtimeEvent('presence', {'onlineCount': total, 'byRole': counts}),
+    );
   }
 
   void _onDropped() {
     _channel = null;
-    _sub?.cancel();
     status.value = ConnectionStatus.disconnected;
     if (!_manuallyClosed) {
-      _retryTimer = Timer(const Duration(seconds: 1, milliseconds: 500), _open);
+      _retryTimer = Timer(
+        const Duration(seconds: 1, milliseconds: 500),
+        _open,
+      );
     }
   }
 
@@ -125,19 +163,19 @@ class RealtimeService {
   }
 
   void send(String type, Map<String, dynamic> payload) {
-    final channel = _channel;
-    if (channel == null || status.value != ConnectionStatus.connected) return;
-    channel.sink.add(jsonEncode({'type': type, 'payload': payload}));
+    if (status.value != ConnectionStatus.connected) return;
+    // Fire-and-forget — same contract as before, callers that care about
+    // delivery use sendReliably instead.
+    unawaited(_performSend(type, payload));
   }
 
   /// Like [send], but for actions where silently dropping the message would
   /// be a real problem (sending an offer, accepting a ride) rather than
-  /// something that self-heals on the next state sync. A plain [send] during
-  /// a brief connection drop just vanishes with no feedback — the caller
-  /// thinks it went through because nothing told them otherwise. This waits
-  /// briefly for the connection to come back (it retries automatically every
-  /// ~1.5s) and reports whether the message actually made it out, so the UI
-  /// can show an error instead of proceeding as if it succeeded.
+  /// something that self-heals on the next state sync. This waits briefly
+  /// for the connection to come back if it's currently down (it retries
+  /// automatically), then actually waits for the broadcast + any table
+  /// write to complete before reporting success, so the UI can show an
+  /// error instead of proceeding as if it worked.
   Future<bool> sendReliably(
     String type,
     Map<String, dynamic> payload, {
@@ -148,16 +186,106 @@ class RealtimeService {
       if (DateTime.now().isAfter(deadline)) return false;
       await Future.delayed(const Duration(milliseconds: 200));
     }
-    send(type, payload);
-    return true;
+    return _performSend(type, payload);
+  }
+
+  Future<bool> _performSend(String type, Map<String, dynamic> payload) async {
+    final channel = _channel;
+    if (channel == null) return false;
+    try {
+      await channel.sendBroadcastMessage(
+        event: _broadcastEvent,
+        payload: {'type': type, 'payload': payload},
+      );
+      switch (type) {
+        case 'ride_request':
+          await _client.from('active_ride_requests').upsert({
+            'id': payload['id'],
+            'payload': payload,
+          });
+          break;
+        case 'ride_countered':
+          await _client.from('ride_offers').upsert({
+            'request_id': payload['requestId'],
+            'driver_id': payload['driverId'],
+            'payload': payload,
+          });
+          break;
+        case 'ride_accepted':
+        case 'ride_cancelled':
+          final requestId = payload['requestId'];
+          await _client
+              .from('active_ride_requests')
+              .delete()
+              .eq('id', requestId as Object);
+          await _client
+              .from('ride_offers')
+              .delete()
+              .eq('request_id', requestId);
+          break;
+        case 'sos_triggered':
+          await _client.from('active_sos').upsert({
+            'id': payload['id'],
+            'payload': payload,
+          });
+          break;
+        case 'sos_resolved':
+          await _client.from('active_sos').delete().eq('id', payload['id']);
+          break;
+        default:
+          break; // broadcast-only: driver_arrived, driver_location,
+          // ride_offer_declined, ride_bid_updated.
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Registers a rider or driver profile so the admin control room can see
+  /// who has signed up. Best-effort — a failure here shouldn't block anyone
+  /// from using the app.
+  Future<bool> register(Map<String, dynamic> fields) async {
+    try {
+      final payload = {
+        ...fields,
+        'registeredAt': DateTime.now().toIso8601String(),
+      };
+      await _client.from('registrations').insert({'payload': payload});
+      final channel = _channel;
+      if (channel != null) {
+        await channel.sendBroadcastMessage(
+          event: _broadcastEvent,
+          payload: {'type': 'user_registered', 'payload': payload},
+        );
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchRegistrations() async {
+    try {
+      await SupabaseConfig.ensureInitialized();
+      final res = await SupabaseConfig.client
+          .from('registrations')
+          .select('payload')
+          .order('created_at', ascending: false);
+      return (res as List)
+          .map((r) => ((r as Map)['payload'] as Map).cast<String, dynamic>())
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   void disconnect() {
     _manuallyClosed = true;
     _retryTimer?.cancel();
-    _sub?.cancel();
-    _channel?.sink.close();
+    final channel = _channel;
     _channel = null;
+    if (channel != null) _client.removeChannel(channel);
     status.value = ConnectionStatus.disconnected;
   }
 }

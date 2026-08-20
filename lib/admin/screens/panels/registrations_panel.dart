@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../../../services/realtime_service.dart';
 import '../../../theme/app_theme.dart';
 
@@ -49,19 +47,10 @@ class _RegistrationsPanelState extends State<RegistrationsPanel> {
 
   Future<void> _loadInitial() async {
     try {
-      final res = await http
-          .get(Uri.parse('${RealtimeService.relayHttpBase}/registrations'))
-          .timeout(const Duration(seconds: 10));
-      if (res.statusCode == 200) {
-        final list = (jsonDecode(res.body) as List)
-            .map((e) => Registration.fromJson((e as Map).cast<String, dynamic>()))
-            .toList()
-            .reversed
-            .toList();
-        if (mounted) setState(() => _registrations.addAll(list));
-      }
-    } catch (_) {
-      // Best-effort — live updates via the socket still work even if this fails.
+      final rows = await RealtimeService.instance.fetchRegistrations();
+      // fetchRegistrations already orders newest-first.
+      final list = rows.map(Registration.fromJson).toList();
+      if (mounted) setState(() => _registrations.addAll(list));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/realtime_service.dart';
 
@@ -76,26 +74,17 @@ class DriverIdentity {
       );
     }
 
-    try {
-      await http
-          .post(
-            Uri.parse('${RealtimeService.relayHttpBase}/register'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'name': trimmedName,
-              'phone': trimmedPhone,
-              'role': 'driver',
-              'carModel': trimmedCar,
-              'plate': trimmedPlate,
-              'gender': gender,
-              'age': age,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
-    } catch (_) {
-      // Best-effort — still let them in even if the relay is briefly
-      // unreachable; their profile is saved locally either way.
-    }
+    // Best-effort — still let them in even if this fails; their profile is
+    // saved locally either way.
+    await RealtimeService.instance.register({
+      'name': trimmedName,
+      'phone': trimmedPhone,
+      'role': 'driver',
+      'carModel': trimmedCar,
+      'plate': trimmedPlate,
+      'gender': gender,
+      'age': age,
+    });
 
     name = trimmedName;
     phone = trimmedPhone;
