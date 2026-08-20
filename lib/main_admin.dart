@@ -29,8 +29,8 @@ class _WoSafarAdminAppState extends State<WoSafarAdminApp> {
       title: 'Saika — Control Room',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      darkTheme: AppTheme.light,
+      themeMode: ThemeMode.light,
       home: const AdminLoginScreen(),
     );
   }

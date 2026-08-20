@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-/// Plain page background — a subtle top-to-bottom plum gradient, no
-/// pattern or texture — meant to sit behind light content cards.
+/// Plain page background — a soft baby-pink fill, no pattern or texture —
+/// meant to sit behind light content cards.
 class SaikaWallpaper extends StatelessWidget {
   final Widget child;
   final Color base;
   const SaikaWallpaper({
     super.key,
     required this.child,
-    this.base = const Color(0xFF2B1424),
+    this.base = const Color(0xFFFBD9E7),
   });
 
   @override
@@ -16,15 +16,7 @@ class SaikaWallpaper extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [base, Color.lerp(base, Colors.black, 0.22)!],
-            ),
-          ),
-        ),
+        DecoratedBox(decoration: BoxDecoration(color: base)),
         child,
       ],
     );

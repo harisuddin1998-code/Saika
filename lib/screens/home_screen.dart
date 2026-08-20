@@ -148,8 +148,8 @@ class _HomeScreenState extends State<HomeScreen>
                 child: TabBar(
                   controller: _tabController,
                   indicatorColor: p.accent,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white70,
+                  labelColor: p.ink,
+                  unselectedLabelColor: p.muted,
                   labelStyle: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -212,8 +212,7 @@ class _HomeScreenState extends State<HomeScreen>
                         children: [
                           Text(
                             'BOOK A RIDE',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: Colors.white),
+                            style: Theme.of(context).textTheme.labelSmall,
                           ),
                           const _ConnectionBadge(),
                         ],
@@ -264,9 +263,7 @@ class _HomeScreenState extends State<HomeScreen>
                       const SizedBox(height: 10),
                       Text(
                         'RIDE TYPE',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelSmall?.copyWith(color: Colors.white),
+                        style: Theme.of(context).textTheme.labelSmall,
                       ),
                       const SizedBox(height: 6),
                       Row(
@@ -287,9 +284,7 @@ class _HomeScreenState extends State<HomeScreen>
                       const SizedBox(height: 10),
                       Text(
                         'DRIVER PREFERENCE',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelSmall?.copyWith(color: Colors.white),
+                        style: Theme.of(context).textTheme.labelSmall,
                       ),
                       const SizedBox(height: 6),
                       Row(
@@ -413,9 +408,7 @@ class _HomeScreenState extends State<HomeScreen>
                       const SizedBox(height: 10),
                       Text(
                         'PAYMENT METHOD',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.labelSmall?.copyWith(color: Colors.white),
+                        style: Theme.of(context).textTheme.labelSmall,
                       ),
                       const SizedBox(height: 6),
                       Wrap(
@@ -457,16 +450,16 @@ class _HomeScreenState extends State<HomeScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.local_taxi_outlined,
                     size: 40,
-                    color: Colors.white70,
+                    color: p.muted,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'No ongoing trip',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: p.ink,
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
@@ -476,7 +469,7 @@ class _HomeScreenState extends State<HomeScreen>
                     'Book a ride from the "Book a Ride" tab and it\'ll show up here while it\'s active.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.7),
+                      color: p.muted,
                       fontSize: 12.5,
                     ),
                   ),
@@ -610,7 +603,7 @@ class _ConnectionBadge extends StatelessWidget {
               width: 7,
               height: 7,
               decoration: BoxDecoration(
-                color: connected ? p.safe : Colors.white70,
+                color: connected ? p.safe : p.muted,
                 shape: BoxShape.circle,
               ),
             ),
@@ -621,7 +614,7 @@ class _ConnectionBadge extends StatelessWidget {
                 fontFamily: 'monospace',
                 fontSize: 9.5,
                 letterSpacing: 0.6,
-                color: connected ? p.safe : Colors.white70,
+                color: connected ? p.safe : p.muted,
               ),
             ),
           ],

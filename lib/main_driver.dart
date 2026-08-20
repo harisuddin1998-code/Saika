@@ -54,8 +54,8 @@ class _WoSafarDriverAppState extends State<WoSafarDriverApp> with WidgetsBinding
       title: 'Saika — Driver',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      darkTheme: AppTheme.light,
+      themeMode: ThemeMode.light,
       home: const DriverSplashScreen(),
     );
   }

@@ -52,8 +52,8 @@ class _WoSafarAppState extends State<WoSafarApp> with WidgetsBindingObserver {
       title: 'Saika — Rider',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
+      darkTheme: AppTheme.light,
+      themeMode: ThemeMode.light,
       home: const SplashScreen(),
     );
   }

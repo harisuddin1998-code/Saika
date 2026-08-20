@@ -188,7 +188,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                         _online ? 'Online — visible to riders' : 'Offline',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: _online ? Colors.white : p.ink,
+                          color: p.ink,
                         ),
                       ),
                     ),
@@ -202,9 +202,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               const SizedBox(height: 18),
               Text(
                 _online ? 'Nearby fare requests' : 'Go online to see requests',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelSmall?.copyWith(color: Colors.white),
+                style: Theme.of(context).textTheme.labelSmall,
               ),
               const SizedBox(height: 10),
               if (_online)
@@ -214,7 +212,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                           child: Text(
                             'Waiting for a rider to request a ride…',
                             style: TextStyle(
-                              color: Colors.white70,
+                              color: p.muted,
                               fontSize: 13,
                             ),
                           ),
