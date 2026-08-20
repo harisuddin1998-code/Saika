@@ -238,7 +238,7 @@ class _WaitingView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Rs $currentPrice sent to nearby women drivers',
+          'Rs $currentPrice sent to nearby drivers',
           style: Theme.of(
             context,
           ).textTheme.headlineMedium?.copyWith(fontSize: 20),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/rider_identity.dart';
 import '../theme/app_theme.dart';
 import '../widgets/saika_pattern.dart';
 import 'bookings_screen.dart';
@@ -26,7 +27,10 @@ class AppDrawer extends StatelessWidget {
                 children: [
                   CircleAvatar(radius: 32, backgroundColor: p.accentInk.withValues(alpha: 0.15), child: Icon(Icons.person, size: 32, color: p.accentInk)),
                   const SizedBox(height: 12),
-                  Text('Hina N.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: p.accentInk)),
+                  Text(
+                    RiderIdentity.name.isEmpty ? 'Rider' : RiderIdentity.name,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: p.accentInk),
+                  ),
                   const SizedBox(height: 2),
                   Text('★ 4.9 rider rating', style: TextStyle(fontSize: 11.5, color: p.accentInk.withValues(alpha: 0.75))),
                 ],

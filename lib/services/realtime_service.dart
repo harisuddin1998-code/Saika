@@ -57,7 +57,12 @@ class RealtimeService {
           .onBroadcast(
             event: _broadcastEvent,
             callback: (payload) {
-              final type = payload['type'] as String? ?? '';
+              // Keyed 'kind', not 'type' — sendBroadcastMessage below
+              // overwrites any 'type' key on the outgoing map with its own
+              // protocol literal ('broadcast'), so a same-named key here
+              // would always read back as that literal instead of our
+              // actual event type.
+              final type = payload['kind'] as String? ?? '';
               final data =
                   (payload['payload'] as Map?)?.cast<String, dynamic>() ??
                   <String, dynamic>{};
@@ -195,7 +200,7 @@ class RealtimeService {
     try {
       await channel.sendBroadcastMessage(
         event: _broadcastEvent,
-        payload: {'type': type, 'payload': payload},
+        payload: {'kind': type, 'payload': payload},
       );
       switch (type) {
         case 'ride_request':
@@ -256,7 +261,7 @@ class RealtimeService {
       if (channel != null) {
         await channel.sendBroadcastMessage(
           event: _broadcastEvent,
-          payload: {'type': 'user_registered', 'payload': payload},
+          payload: {'kind': 'user_registered', 'payload': payload},
         );
       }
       return true;
