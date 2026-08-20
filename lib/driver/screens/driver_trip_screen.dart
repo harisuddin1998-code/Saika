@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/ride_request.dart';
 import '../../screens/sos_screen.dart';
 import '../../services/realtime_service.dart';
@@ -106,6 +107,21 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
       const Duration(seconds: 5),
       (_) => pushLocation(),
     );
+  }
+
+  Future<void> _navigateToTarget() async {
+    final target = _arrivedAtPickup ? drop : pickup;
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1'
+      '&destination=${target.latitude},${target.longitude}'
+      '&travelmode=driving',
+    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Couldn\'t open Maps for navigation.')),
+      );
+    }
   }
 
   void _warnLocationUnavailable() {
@@ -300,6 +316,34 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              if (_myLocation != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFD6336C),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _arrivedAtPickup
+                            ? 'Following route to drop-off'
+                            : 'Following route to ${request.riderName}',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: p.ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               FutureBuilder<List<LatLng>>(
                 future: _routeFuture,
                 builder: (context, snapshot) {
@@ -307,6 +351,7 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
                     height: 170,
                     center: _myLocation ?? pickup,
                     zoom: 13,
+                    followCenter: true,
                     routePoints: snapshot.data ?? [pickup, drop],
                     pins: [
                       LiveMapPin(
@@ -330,12 +375,27 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
                 },
               ),
               const SizedBox(height: 10),
-              if (!_arrivedAtPickup)
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: p.ink,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: _navigateToTarget,
+                icon: const Icon(Icons.navigation_outlined, size: 18),
+                label: Text(
+                  _arrivedAtPickup
+                      ? 'Navigate to drop-off'
+                      : 'Navigate to passenger',
+                ),
+              ),
+              if (!_arrivedAtPickup) ...[
+                const SizedBox(height: 8),
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(foregroundColor: p.sos),
                   onPressed: _cancelTrip,
                   child: const Text('Cancel trip'),
                 ),
+              ],
               const Spacer(),
               SosHoldButton(
                 onTriggered: () {

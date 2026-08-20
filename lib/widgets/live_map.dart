@@ -9,13 +9,17 @@ import '../theme/app_theme.dart';
 /// URL for a Mapbox/MapTiler URL (with your token) once this moves from
 /// prototype to production traffic; free public tile servers are not meant
 /// for high-volume production use.
-class LiveMapView extends StatelessWidget {
+class LiveMapView extends StatefulWidget {
   final double height;
   final LatLng center;
   final double zoom;
   final List<LiveMapPin> pins;
   final List<LatLng>? routePoints;
   final bool interactive;
+  // When true, the camera pans to follow [center] as it changes (e.g. a
+  // driver's live location) instead of staying fixed on the first frame's
+  // position — without this a moving pin can walk itself off-screen.
+  final bool followCenter;
 
   const LiveMapView({
     super.key,
@@ -25,7 +29,23 @@ class LiveMapView extends StatelessWidget {
     this.pins = const [],
     this.routePoints,
     this.interactive = true,
+    this.followCenter = false,
   });
+
+  @override
+  State<LiveMapView> createState() => _LiveMapViewState();
+}
+
+class _LiveMapViewState extends State<LiveMapView> {
+  final MapController _controller = MapController();
+
+  @override
+  void didUpdateWidget(covariant LiveMapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.followCenter && widget.center != oldWidget.center) {
+      _controller.move(widget.center, _controller.camera.zoom);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,14 +53,17 @@ class LiveMapView extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: SizedBox(
-        height: height,
+        height: widget.height,
         width: double.infinity,
         child: FlutterMap(
+          mapController: _controller,
           options: MapOptions(
-            initialCenter: center,
-            initialZoom: zoom,
+            initialCenter: widget.center,
+            initialZoom: widget.zoom,
             interactionOptions: InteractionOptions(
-              flags: interactive ? InteractiveFlag.all : InteractiveFlag.none,
+              flags: widget.interactive
+                  ? InteractiveFlag.all
+                  : InteractiveFlag.none,
             ),
           ),
           children: [
@@ -49,14 +72,14 @@ class LiveMapView extends StatelessWidget {
               subdomains: const ['a', 'b', 'c', 'd'],
               userAgentPackageName: 'com.saika.app',
             ),
-            if (routePoints != null && routePoints!.length > 1)
+            if (widget.routePoints != null && widget.routePoints!.length > 1)
               PolylineLayer(
                 polylines: [
-                  Polyline(points: routePoints!, strokeWidth: 4, color: p.accent),
+                  Polyline(points: widget.routePoints!, strokeWidth: 4, color: p.accent),
                 ],
               ),
             MarkerLayer(
-              markers: pins
+              markers: widget.pins
                   .map(
                     (pin) => Marker(
                       point: pin.point,

@@ -85,12 +85,30 @@ class _TripScreenState extends State<TripScreen> {
     });
   }
 
-  void _handleDriverCancelled() {
+  Future<void> _handleDriverCancelled() async {
     ActiveTripStore.instance.end();
     NotificationService.instance.show(
       'Ride cancelled',
       '${widget.driver.name} cancelled this ride.',
     );
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+        title: const Text('Ride cancelled'),
+        content: Text(
+          '${widget.driver.name} has cancelled this ride. You can request another driver from home.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         settings: const RouteSettings(name: '/home'),
@@ -295,6 +313,32 @@ class _TripScreenState extends State<TripScreen> {
                 ),
               ],
               const SizedBox(height: 16),
+              if (_driverLocation != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFD6336C),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Tracking ${driver.name} live',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: p.ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               FutureBuilder<List<LatLng>>(
                 future: _routeFuture,
                 builder: (context, snapshot) {
@@ -302,6 +346,7 @@ class _TripScreenState extends State<TripScreen> {
                     height: 150,
                     center: _driverLocation ?? pickup,
                     zoom: 13,
+                    followCenter: true,
                     routePoints: snapshot.data ?? [pickup, drop],
                     pins: [
                       LiveMapPin(
