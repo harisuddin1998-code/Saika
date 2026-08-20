@@ -11,9 +11,12 @@ import '../services/route_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_map.dart';
 import '../widgets/sos_hold_button.dart';
+import 'home_screen.dart';
 import 'rate_screen.dart';
 import 'sos_screen.dart';
 import 'trusted_circle_screen.dart';
+
+const _freeCancelWindow = Duration(seconds: 20);
 
 class TripScreen extends StatefulWidget {
   final DriverOffer driver;
@@ -31,10 +34,12 @@ class _TripScreenState extends State<TripScreen> {
   StreamSubscription? _sub;
   bool _driverArrived = false;
   LatLng? _driverLocation;
+  late final DateTime _tripStartedAt;
 
   @override
   void initState() {
     super.initState();
+    _tripStartedAt = DateTime.now();
     ActiveTripStore.instance.start(widget.driver, widget.request);
     pickup = LatLng(widget.request.pickupLat, widget.request.pickupLng);
     drop = LatLng(widget.request.dropLat, widget.request.dropLng);
@@ -47,6 +52,11 @@ class _TripScreenState extends State<TripScreen> {
         final lng = (event.payload['lng'] as num?)?.toDouble();
         if (lat == null || lng == null) return;
         setState(() => _driverLocation = LatLng(lat, lng));
+        return;
+      }
+      if (event.type == 'ride_cancelled') {
+        if (event.payload['cancelledBy'] != 'driver' || !mounted) return;
+        _handleDriverCancelled();
         return;
       }
       if (event.type != 'driver_arrived') return;
@@ -73,6 +83,73 @@ class _TripScreenState extends State<TripScreen> {
         ),
       );
     });
+  }
+
+  void _handleDriverCancelled() {
+    ActiveTripStore.instance.end();
+    NotificationService.instance.show(
+      'Ride cancelled',
+      '${widget.driver.name} cancelled this ride.',
+    );
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/home'),
+        builder: (_) => const HomeScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
+  Future<void> _cancelRide() async {
+    final isLate = DateTime.now().difference(_tripStartedAt) > _freeCancelWindow;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cancel this ride?'),
+        content: Text(
+          isLate
+              ? 'It\'s been more than 20 seconds since you accepted this driver — cancelling now may include a cancellation fee.'
+              : 'You can cancel free of charge within 20 seconds of accepting a driver.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep ride'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(isLate ? 'Cancel anyway' : 'Cancel ride'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final scaffold = ScaffoldMessenger.of(context);
+    final sent = await RealtimeService.instance.sendReliably('ride_cancelled', {
+      'requestId': widget.request.id,
+      'cancelledBy': 'rider',
+      'lateCancellation': isLate,
+    });
+    if (!mounted) return;
+    if (!sent) {
+      scaffold.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No connection — couldn\'t cancel. Check your internet and try again.',
+          ),
+        ),
+      );
+      return;
+    }
+    ActiveTripStore.instance.end();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/home'),
+        builder: (_) => const HomeScreen(),
+      ),
+      (route) => false,
+    );
   }
 
   /// A simple straight-line estimate (no live routing API for this) — good
@@ -272,6 +349,14 @@ class _TripScreenState extends State<TripScreen> {
                 ),
                 child: const Text('View Trusted Circle'),
               ),
+              if (!_driverArrived) ...[
+                const SizedBox(height: 6),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(foregroundColor: p.sos),
+                  onPressed: _cancelRide,
+                  child: const Text('Cancel ride'),
+                ),
+              ],
               const Spacer(),
               SosHoldButton(
                 onTriggered: () {

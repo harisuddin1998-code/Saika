@@ -13,6 +13,8 @@ import '../../widgets/sos_hold_button.dart';
 import '../models/driver_identity.dart';
 import 'driver_home_screen.dart';
 
+const _freeCancelWindow = Duration(seconds: 20);
+
 class DriverTripScreen extends StatefulWidget {
   final RideRequest request;
   final int agreedPrice;
@@ -30,17 +32,38 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
   late final LatLng pickup;
   late final LatLng drop;
   late final Future<List<LatLng>> _routeFuture;
+  late final DateTime _tripStartedAt;
   bool _arrivedAtPickup = false;
   Timer? _locationTimer;
+  StreamSubscription? _sub;
+  LatLng? _myLocation;
 
   @override
   void initState() {
     super.initState();
+    _tripStartedAt = DateTime.now();
     pickup = LatLng(widget.request.pickupLat, widget.request.pickupLng);
     drop = LatLng(widget.request.dropLat, widget.request.dropLng);
     _routeFuture = fetchRoadRoute(pickup, drop);
     _startSharingLocation();
+    _sub = RealtimeService.instance.events.listen((event) {
+      if (event.type != 'ride_cancelled') return;
+      if (event.payload['requestId'] != widget.request.id) return;
+      if (event.payload['cancelledBy'] != 'rider' || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${request.riderName} cancelled this ride.')),
+      );
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          settings: const RouteSettings(name: '/driver_home'),
+          builder: (_) => const DriverHomeScreen(),
+        ),
+        (route) => false,
+      );
+    });
   }
+
+  RideRequest get request => widget.request;
 
   Future<void> _startSharingLocation() async {
     var permission = await Geolocator.checkPermission();
@@ -49,9 +72,13 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
+      _warnLocationUnavailable();
       return;
     }
-    if (!await Geolocator.isLocationServiceEnabled()) return;
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      _warnLocationUnavailable();
+      return;
+    }
 
     Future<void> pushLocation() async {
       try {
@@ -60,6 +87,9 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
             accuracy: LocationAccuracy.high,
           ),
         );
+        if (mounted) {
+          setState(() => _myLocation = LatLng(pos.latitude, pos.longitude));
+        }
         RealtimeService.instance.send('driver_location', {
           'requestId': widget.request.id,
           'lat': pos.latitude,
@@ -78,9 +108,35 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
     );
   }
 
+  void _warnLocationUnavailable() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Location is off — turn it on so the rider can see you on the map.',
+          ),
+          duration: Duration(seconds: 5),
+        ),
+      );
+    });
+  }
+
+  /// Straight-line estimate to the pickup (or the drop-off, once the trip is
+  /// under way) — no live routing API for this, just enough to give a sense
+  /// of "close" vs "still a while away".
+  ({double km, int etaMin}) _distanceAndEta() {
+    final target = _arrivedAtPickup ? drop : pickup;
+    final km = const Distance().as(LengthUnit.Kilometer, _myLocation!, target);
+    const avgCitySpeedKmh = 25.0;
+    final etaMin = (km / avgCitySpeedKmh * 60).ceil().clamp(1, 999);
+    return (km: km, etaMin: etaMin);
+  }
+
   @override
   void dispose() {
     _locationTimer?.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 
@@ -104,10 +160,60 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
     setState(() => _arrivedAtPickup = true);
   }
 
+  Future<void> _cancelTrip() async {
+    final isLate = DateTime.now().difference(_tripStartedAt) > _freeCancelWindow;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cancel this trip?'),
+        content: Text(
+          isLate
+              ? 'It\'s been more than 20 seconds since you accepted — cancelling now may include a cancellation fee.'
+              : 'You can cancel free of charge within 20 seconds of accepting.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep trip'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(isLate ? 'Cancel anyway' : 'Cancel trip'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final scaffold = ScaffoldMessenger.of(context);
+    final sent = await RealtimeService.instance.sendReliably('ride_cancelled', {
+      'requestId': widget.request.id,
+      'cancelledBy': 'driver',
+      'lateCancellation': isLate,
+    });
+    if (!mounted) return;
+    if (!sent) {
+      scaffold.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No connection — couldn\'t cancel. Check your internet and try again.',
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/driver_home'),
+        builder: (_) => const DriverHomeScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Theme.of(context).extension<AppPalette>()!;
-    final request = widget.request;
     final agreedPrice = widget.agreedPrice;
     return Scaffold(
       appBar: AppBar(
@@ -152,7 +258,10 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
                             ),
                           ),
                           Text(
-                            '${request.pickup} → ${request.dropoff}',
+                            _myLocation == null
+                                ? '${request.pickup} → ${request.dropoff}'
+                                : '${_distanceAndEta().km.toStringAsFixed(1)} km away · '
+                                      'ETA ~${_distanceAndEta().etaMin} min',
                             style: TextStyle(fontSize: 11.5, color: p.muted),
                           ),
                           const SizedBox(height: 6),
@@ -196,24 +305,37 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
                 builder: (context, snapshot) {
                   return LiveMapView(
                     height: 170,
-                    center: pickup,
+                    center: _myLocation ?? pickup,
                     zoom: 13,
                     routePoints: snapshot.data ?? [pickup, drop],
                     pins: [
                       LiveMapPin(
                         point: pickup,
                         color: const Color(0xFF4FAE7A),
-                        icon: Icons.directions_car,
+                        icon: Icons.my_location,
                       ),
                       LiveMapPin(
                         point: drop,
                         color: const Color(0xFFD6A24C),
                         icon: Icons.flag,
                       ),
+                      if (_myLocation != null)
+                        LiveMapPin(
+                          point: _myLocation!,
+                          color: const Color(0xFFD6336C),
+                          icon: Icons.directions_car,
+                        ),
                     ],
                   );
                 },
               ),
+              const SizedBox(height: 10),
+              if (!_arrivedAtPickup)
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(foregroundColor: p.sos),
+                  onPressed: _cancelTrip,
+                  child: const Text('Cancel trip'),
+                ),
               const Spacer(),
               SosHoldButton(
                 onTriggered: () {

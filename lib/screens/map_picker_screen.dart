@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/geocode_service.dart';
 import '../theme/app_theme.dart';
@@ -14,9 +15,11 @@ class MapPickerScreen extends StatefulWidget {
 }
 
 class _MapPickerScreenState extends State<MapPickerScreen> {
+  final MapController _mapController = MapController();
   late LatLng _center;
   String _address = 'Move the map to pin a location';
   bool _loading = false;
+  bool _locating = false;
 
   @override
   void initState() {
@@ -35,6 +38,41 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     });
   }
 
+  Future<void> _useCurrentLocation() async {
+    setState(() => _locating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location permission is needed to find you on the map.'),
+          ),
+        );
+        return;
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Turn on location services and try again.')),
+        );
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      _center = LatLng(pos.latitude, pos.longitude);
+      _mapController.move(_center, 15);
+      await _resolveAddress();
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Theme.of(context).extension<AppPalette>()!;
@@ -43,6 +81,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       body: Stack(
         children: [
           FlutterMap(
+            mapController: _mapController,
             options: MapOptions(
               initialCenter: _center,
               initialZoom: 14,
@@ -70,6 +109,32 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                   Icons.location_on,
                   size: 44,
                   color: Color(0xFFD6A24C),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 16,
+            bottom: 150,
+            child: Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              elevation: 4,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _locating ? null : _useCurrentLocation,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: _locating
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: p.accent,
+                          ),
+                        )
+                      : Icon(Icons.my_location, size: 20, color: p.accent),
                 ),
               ),
             ),
