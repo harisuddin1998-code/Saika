@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/saika_pattern.dart';
-import '../../widgets/blurred_brand.dart';
 import '../models/driver_identity.dart';
 import 'driver_home_screen.dart';
 import 'driver_login_screen.dart';
@@ -52,16 +51,19 @@ class _DriverSplashScreenState extends State<DriverSplashScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: p.safe, width: 2)),
-                      alignment: Alignment.center,
-                      child: Icon(Icons.electric_car, size: 34, color: p.safe),
+                      width: 92,
+                      height: 92,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: p.safe, width: 2),
+                        image: const DecorationImage(
+                          image: AssetImage('assets/branding/logo.png'),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 20),
-                    BlurredBrand(
-                      child: Text('Saika', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 34)),
-                    ),
+                    Text('Saika', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 34)),
                     const SizedBox(height: 6),
                     Text('DRIVER', style: TextStyle(fontFamily: 'monospace', fontSize: 13, letterSpacing: 3, color: p.safe, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 14),

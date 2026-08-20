@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/rider_identity.dart';
 import '../theme/app_theme.dart';
 import '../widgets/saika_pattern.dart';
-import '../widgets/blurred_brand.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
@@ -50,19 +49,20 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    BlurredBrand(
-                      child: Container(
-                        width: 84,
-                        height: 84,
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: p.accent, width: 2)),
-                        alignment: Alignment.center,
-                        child: Text('سا', style: TextStyle(fontFamily: 'serif', fontSize: 30, color: p.accent, fontWeight: FontWeight.bold)),
+                    Container(
+                      width: 92,
+                      height: 92,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: p.accent, width: 2),
+                        image: const DecorationImage(
+                          image: AssetImage('assets/branding/logo.png'),
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
-                    BlurredBrand(
-                      child: Text('Saika', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 34)),
-                    ),
+                    Text('Saika', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 34)),
                     const SizedBox(height: 10),
                     Text(
                       '"Safar jo maa, behn ke saath ho"',

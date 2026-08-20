@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../screens/contact_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/saika_pattern.dart';
-import '../../widgets/blurred_brand.dart';
 import '../models/driver_identity.dart';
 import 'driver_earnings_screen.dart';
 import 'driver_login_screen.dart';
@@ -73,7 +72,7 @@ class DriverDrawer extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const Center(child: BlurredBrand(child: Text('Saika'))),
+            const Center(child: Text('Saika')),
             const SizedBox(height: 16),
           ],
         ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/blurred_brand.dart';
 import 'admin_shell.dart';
 
 class AdminLoginScreen extends StatelessWidget {
@@ -19,9 +18,7 @@ class AdminLoginScreen extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                BlurredBrand(
-                  child: Text('Saika', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28)),
-                ),
+                Text('Saika', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 28)),
                 Text('CONTROL ROOM', style: TextStyle(fontFamily: 'monospace', fontSize: 12, letterSpacing: 3, color: p.accent, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 28),
                 TextField(decoration: const InputDecoration(labelText: 'Operator ID', border: OutlineInputBorder())),

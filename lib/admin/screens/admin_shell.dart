@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/blurred_brand.dart';
 import 'panels/overview_panel.dart';
 import 'panels/registrations_panel.dart';
 import 'panels/sos_queue_panel.dart';
@@ -41,13 +40,11 @@ class _AdminShellState extends State<AdminShell> {
             backgroundColor: p.surface,
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: BlurredBrand(
-                child: Column(
-                  children: [
-                    Text('WO', style: TextStyle(fontFamily: 'serif', fontWeight: FontWeight.bold, fontSize: 20, color: p.accent)),
-                    Text('SAFAR', style: TextStyle(fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: p.muted)),
-                  ],
-                ),
+              child: Column(
+                children: [
+                  Text('SAIKA', style: TextStyle(fontFamily: 'serif', fontWeight: FontWeight.bold, fontSize: 16, color: p.accent)),
+                  Text('CONTROL', style: TextStyle(fontFamily: 'monospace', fontSize: 8, letterSpacing: 2, color: p.muted)),
+                ],
               ),
             ),
             destinations: _destinations,

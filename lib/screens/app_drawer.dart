@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/saika_pattern.dart';
-import '../widgets/blurred_brand.dart';
 import 'bookings_screen.dart';
 import 'contact_screen.dart';
 import 'login_screen.dart';
@@ -80,7 +79,7 @@ class AppDrawer extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const Center(child: BlurredBrand(child: Text('Saika'))),
+            const Center(child: Text('Saika')),
             const SizedBox(height: 16),
           ],
         ),
