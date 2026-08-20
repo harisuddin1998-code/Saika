@@ -91,6 +91,12 @@ class RealtimeService {
     }
   }
 
+  /// Callable from screens that need to be sure they're not relying purely
+  /// on a live broadcast arriving — polls the same snapshot the server
+  /// sends on (re)connect. Works over plain REST, independent of whether
+  /// the realtime channel itself is currently connected.
+  Future<void> refreshSnapshot() => _emitStateSnapshot();
+
   Future<void> _emitStateSnapshot() async {
     try {
       final requestsRes = await _client
@@ -178,34 +184,61 @@ class RealtimeService {
     _open();
   }
 
+  /// Event types with a durable database side effect (as opposed to
+  /// broadcast-only events like driver_location or driver_arrived). For
+  /// these, [sendReliably] persists over plain REST — independent of the
+  /// realtime socket entirely — before even attempting the live broadcast,
+  /// so the action itself (e.g. a cancellation) is never lost to a flaky
+  /// WebSocket even if the instant push to the other party is delayed
+  /// until their next reconnect or periodic snapshot poll picks it up.
+  static const _persistedTypes = {
+    'ride_request',
+    'ride_countered',
+    'ride_accepted',
+    'ride_cancelled',
+    'sos_triggered',
+    'sos_resolved',
+  };
+
   void send(String type, Map<String, dynamic> payload) {
+    if (_persistedTypes.contains(type)) {
+      unawaited(_persist(type, payload));
+    }
     if (status.value != ConnectionStatus.connected) return;
     // Fire-and-forget — same contract as before, callers that care about
     // delivery use sendReliably instead.
-    unawaited(_performSend(type, payload));
+    unawaited(_broadcastOnly(type, payload));
   }
 
   /// Like [send], but for actions where silently dropping the message would
-  /// be a real problem (sending an offer, accepting a ride) rather than
-  /// something that self-heals on the next state sync. This waits briefly
-  /// for the connection to come back if it's currently down (it retries
-  /// automatically), then actually waits for the broadcast + any table
-  /// write to complete before reporting success, so the UI can show an
-  /// error instead of proceeding as if it worked.
+  /// be a real problem (sending an offer, accepting a ride, cancelling)
+  /// rather than something that self-heals on the next state sync.
+  /// Persists to the database first — that step only needs plain REST, not
+  /// a live socket — then waits briefly for the connection to come back
+  /// (it retries automatically) to also broadcast for instant delivery.
+  /// Reports success as soon as either side effect actually happened, so a
+  /// rider isn't stuck unable to cancel just because the socket is
+  /// momentarily down while REST still works fine.
   Future<bool> sendReliably(
     String type,
     Map<String, dynamic> payload, {
     Duration timeout = const Duration(seconds: 8),
   }) async {
+    var persisted = false;
+    if (_persistedTypes.contains(type)) {
+      persisted = await _persist(type, payload);
+    }
+
     final deadline = DateTime.now().add(timeout);
     while (status.value != ConnectionStatus.connected) {
-      if (DateTime.now().isAfter(deadline)) return false;
+      if (DateTime.now().isAfter(deadline)) return persisted;
       await Future.delayed(const Duration(milliseconds: 200));
     }
-    return _performSend(type, payload);
+    final broadcasted = await _broadcastOnly(type, payload);
+    return broadcasted || persisted;
   }
 
-  Future<bool> _performSend(String type, Map<String, dynamic> payload) async {
+  Future<bool> _broadcastOnly(String type, Map<String, dynamic> payload) async {
     final channel = _channel;
     if (channel == null) return false;
     try {
@@ -213,6 +246,14 @@ class RealtimeService {
         event: _broadcastEvent,
         payload: {'kind': type, 'payload': payload},
       );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _persist(String type, Map<String, dynamic> payload) async {
+    try {
       switch (type) {
         case 'ride_request':
           await _client.from('active_ride_requests').upsert({
@@ -242,10 +283,9 @@ class RealtimeService {
             // drops connection mid-trip can tell — via the next
             // state_snapshot — whether it's still on, instead of relying
             // solely on a cancellation broadcast it might have missed.
-            // Best-effort in its own try/catch: this is a reliability
-            // enhancement, not a requirement for accepting the ride, so it
-            // shouldn't be able to make sendReliably report failure back to
-            // the rider on an otherwise-successful accept.
+            // Isolated in its own try/catch: a project that hasn't run the
+            // active_trips migration yet shouldn't fail an otherwise-
+            // successful accept over this reliability add-on.
             try {
               await _client.from('active_trips').upsert({
                 'id': requestId,
@@ -279,9 +319,6 @@ class RealtimeService {
         case 'sos_resolved':
           await _client.from('active_sos').delete().eq('id', payload['id']);
           break;
-        default:
-          break; // broadcast-only: driver_arrived, driver_location,
-          // ride_offer_declined, ride_bid_updated.
       }
       return true;
     } catch (_) {

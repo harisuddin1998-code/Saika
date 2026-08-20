@@ -44,6 +44,7 @@ class _TripScreenState extends State<TripScreen> {
   // from a later snapshot means it was cancelled while we were briefly
   // disconnected, not that it never existed yet.
   bool _sawTripActive = false;
+  Timer? _snapshotPoll;
 
   @override
   void initState() {
@@ -53,6 +54,15 @@ class _TripScreenState extends State<TripScreen> {
     pickup = LatLng(widget.request.pickupLat, widget.request.pickupLng);
     drop = LatLng(widget.request.dropLat, widget.request.dropLng);
     _routeFuture = fetchRoadRoute(pickup, drop);
+    // Belt-and-suspenders on top of the live 'ride_cancelled' broadcast and
+    // the reconnect-triggered snapshot: polls over plain REST every few
+    // seconds so a cancellation is caught within a bounded time even if a
+    // broadcast is silently dropped while both sides otherwise look
+    // connected.
+    _snapshotPoll = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => RealtimeService.instance.refreshSnapshot(),
+    );
     _sub = RealtimeService.instance.events.listen((event) {
       if (event.type == 'state_snapshot') {
         final activeTripIds =
@@ -220,6 +230,7 @@ class _TripScreenState extends State<TripScreen> {
   @override
   void dispose() {
     _sub?.cancel();
+    _snapshotPoll?.cancel();
     super.dispose();
   }
 
