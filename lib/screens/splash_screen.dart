@@ -65,7 +65,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     Text('Saika', style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 34)),
                     const SizedBox(height: 10),
                     Text(
-                      '"Safar jo maa, behn ke saath ho"',
+                      'Every ride, watched over like family.',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontFamily: 'serif', fontStyle: FontStyle.italic, fontSize: 16, color: p.inkDim),
                     ),
