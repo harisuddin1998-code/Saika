@@ -104,6 +104,16 @@ class RealtimeService {
       final offersRes = await _client
           .from('ride_offers')
           .select('request_id, payload');
+      // Isolated from the rest: an older Supabase project without this
+      // table yet shouldn't lose the whole snapshot (which BiddingScreen
+      // and DriverHomeScreen depend on) over one missing reliability add-on.
+      var activeTripIds = <String>[];
+      try {
+        final tripsRes = await _client.from('active_trips').select('id');
+        activeTripIds = (tripsRes as List)
+            .map((r) => (r as Map)['id'] as String)
+            .toList();
+      } catch (_) {}
 
       final activeRequests = (requestsRes as List)
           .map((r) => (r as Map)['payload'])
@@ -124,6 +134,7 @@ class RealtimeService {
           'activeRequests': activeRequests,
           'activeSos': activeSos,
           'offers': offersByRequest,
+          'activeTripIds': activeTripIds,
         }),
       );
     } catch (_) {
@@ -217,16 +228,47 @@ class RealtimeService {
           });
           break;
         case 'ride_accepted':
+          {
+            final requestId = payload['requestId'] as Object;
+            await _client
+                .from('active_ride_requests')
+                .delete()
+                .eq('id', requestId);
+            await _client
+                .from('ride_offers')
+                .delete()
+                .eq('request_id', requestId);
+            // Marks the trip as active from here so a client that briefly
+            // drops connection mid-trip can tell — via the next
+            // state_snapshot — whether it's still on, instead of relying
+            // solely on a cancellation broadcast it might have missed.
+            // Best-effort in its own try/catch: this is a reliability
+            // enhancement, not a requirement for accepting the ride, so it
+            // shouldn't be able to make sendReliably report failure back to
+            // the rider on an otherwise-successful accept.
+            try {
+              await _client.from('active_trips').upsert({
+                'id': requestId,
+                'payload': {'requestId': requestId},
+              });
+            } catch (_) {}
+          }
+          break;
         case 'ride_cancelled':
-          final requestId = payload['requestId'];
-          await _client
-              .from('active_ride_requests')
-              .delete()
-              .eq('id', requestId as Object);
-          await _client
-              .from('ride_offers')
-              .delete()
-              .eq('request_id', requestId);
+          {
+            final requestId = payload['requestId'] as Object;
+            await _client
+                .from('active_ride_requests')
+                .delete()
+                .eq('id', requestId);
+            await _client
+                .from('ride_offers')
+                .delete()
+                .eq('request_id', requestId);
+            try {
+              await _client.from('active_trips').delete().eq('id', requestId);
+            } catch (_) {}
+          }
           break;
         case 'sos_triggered':
           await _client.from('active_sos').upsert({

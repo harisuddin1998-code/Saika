@@ -36,6 +36,14 @@ class _TripScreenState extends State<TripScreen> {
   bool _driverArrived = false;
   LatLng? _driverLocation;
   late final DateTime _tripStartedAt;
+  // Tracks whether we've ever confirmed via a state_snapshot that the
+  // server still considers this trip active — a cancellation broadcast is
+  // fire-and-forget, so if either side's connection drops for even a
+  // moment around when the other cancels, that broadcast is gone for good.
+  // Once we've seen the trip listed as active at least once, its absence
+  // from a later snapshot means it was cancelled while we were briefly
+  // disconnected, not that it never existed yet.
+  bool _sawTripActive = false;
 
   @override
   void initState() {
@@ -46,6 +54,17 @@ class _TripScreenState extends State<TripScreen> {
     drop = LatLng(widget.request.dropLat, widget.request.dropLng);
     _routeFuture = fetchRoadRoute(pickup, drop);
     _sub = RealtimeService.instance.events.listen((event) {
+      if (event.type == 'state_snapshot') {
+        final activeTripIds =
+            (event.payload['activeTripIds'] as List?) ?? const [];
+        final stillActive = activeTripIds.contains(widget.request.id);
+        if (stillActive) {
+          _sawTripActive = true;
+        } else if (_sawTripActive && mounted) {
+          _handleDriverCancelled();
+        }
+        return;
+      }
       if (event.payload['requestId'] != widget.request.id) return;
       if (event.type == 'driver_location') {
         if (!mounted) return;
@@ -86,7 +105,11 @@ class _TripScreenState extends State<TripScreen> {
     });
   }
 
+  bool _handledCancellation = false;
+
   Future<void> _handleDriverCancelled() async {
+    if (_handledCancellation) return;
+    _handledCancellation = true;
     ActiveTripStore.instance.end();
     NotificationService.instance.show(
       'Ride cancelled',
@@ -169,6 +192,7 @@ class _TripScreenState extends State<TripScreen> {
       );
       return;
     }
+    _handledCancellation = true;
     ActiveTripStore.instance.end();
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(

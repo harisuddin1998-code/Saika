@@ -38,6 +38,13 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
   Timer? _locationTimer;
   StreamSubscription? _sub;
   LatLng? _myLocation;
+  // Same reconciliation as the rider's trip screen — a cancellation
+  // broadcast is fire-and-forget, so a brief connection drop around when
+  // the rider cancels can mean this broadcast never arrives. Once a
+  // state_snapshot has confirmed the trip is active at least once, its
+  // later absence means it was cancelled while we were briefly disconnected.
+  bool _sawTripActive = false;
+  bool _handledCancellation = false;
 
   @override
   void initState() {
@@ -48,6 +55,17 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
     _routeFuture = fetchRoadRoute(pickup, drop);
     _startSharingLocation();
     _sub = RealtimeService.instance.events.listen((event) {
+      if (event.type == 'state_snapshot') {
+        final activeTripIds =
+            (event.payload['activeTripIds'] as List?) ?? const [];
+        final stillActive = activeTripIds.contains(widget.request.id);
+        if (stillActive) {
+          _sawTripActive = true;
+        } else if (_sawTripActive && mounted) {
+          _handleRiderCancelled();
+        }
+        return;
+      }
       if (event.type != 'ride_cancelled') return;
       if (event.payload['requestId'] != widget.request.id) return;
       if (event.payload['cancelledBy'] != 'rider' || !mounted) return;
@@ -58,6 +76,8 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
   RideRequest get request => widget.request;
 
   Future<void> _handleRiderCancelled() async {
+    if (_handledCancellation) return;
+    _handledCancellation = true;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -235,6 +255,7 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
       );
       return;
     }
+    _handledCancellation = true;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         settings: const RouteSettings(name: '/driver_home'),
