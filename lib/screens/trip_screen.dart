@@ -30,6 +30,7 @@ class _TripScreenState extends State<TripScreen> {
   late final Future<List<LatLng>> _routeFuture;
   StreamSubscription? _sub;
   bool _driverArrived = false;
+  LatLng? _driverLocation;
 
   @override
   void initState() {
@@ -39,8 +40,16 @@ class _TripScreenState extends State<TripScreen> {
     drop = LatLng(widget.request.dropLat, widget.request.dropLng);
     _routeFuture = fetchRoadRoute(pickup, drop);
     _sub = RealtimeService.instance.events.listen((event) {
-      if (event.type != 'driver_arrived') return;
       if (event.payload['requestId'] != widget.request.id) return;
+      if (event.type == 'driver_location') {
+        if (!mounted) return;
+        final lat = (event.payload['lat'] as num?)?.toDouble();
+        final lng = (event.payload['lng'] as num?)?.toDouble();
+        if (lat == null || lng == null) return;
+        setState(() => _driverLocation = LatLng(lat, lng));
+        return;
+      }
+      if (event.type != 'driver_arrived') return;
       if (_driverArrived || !mounted) return;
       setState(() => _driverArrived = true);
       ActiveTripStore.instance.markArrived();
@@ -64,6 +73,20 @@ class _TripScreenState extends State<TripScreen> {
         ),
       );
     });
+  }
+
+  /// A simple straight-line estimate (no live routing API for this) — good
+  /// enough to give the rider a sense of "close" vs "still a while away".
+  ({double km, int etaMin}) _distanceAndEta() {
+    final target = _driverArrived ? drop : pickup;
+    final km = const Distance().as(
+      LengthUnit.Kilometer,
+      _driverLocation!,
+      target,
+    );
+    const avgCitySpeedKmh = 25.0;
+    final etaMin = (km / avgCitySpeedKmh * 60).ceil().clamp(1, 999);
+    return (km: km, etaMin: etaMin);
   }
 
   @override
@@ -144,7 +167,11 @@ class _TripScreenState extends State<TripScreen> {
                           Text(
                             _driverArrived
                                 ? '${driver.carModel} · ${driver.plate} · Arrived'
-                                : '${driver.carModel} · ${driver.plate} · ETA 4 min',
+                                : _driverLocation == null
+                                ? '${driver.carModel} · ${driver.plate} · Locating driver…'
+                                : '${driver.carModel} · ${driver.plate} · '
+                                      '${_distanceAndEta().km.toStringAsFixed(1)} km away · '
+                                      'ETA ~${_distanceAndEta().etaMin} min',
                             style: TextStyle(
                               fontSize: 11.5,
                               color: _driverArrived ? p.safeInk : p.muted,
@@ -196,7 +223,7 @@ class _TripScreenState extends State<TripScreen> {
                 builder: (context, snapshot) {
                   return LiveMapView(
                     height: 150,
-                    center: pickup,
+                    center: _driverLocation ?? pickup,
                     zoom: 13,
                     routePoints: snapshot.data ?? [pickup, drop],
                     pins: [
@@ -208,8 +235,14 @@ class _TripScreenState extends State<TripScreen> {
                       LiveMapPin(
                         point: drop,
                         color: const Color(0xFF4FAE7A),
-                        icon: Icons.directions_car,
+                        icon: Icons.flag,
                       ),
+                      if (_driverLocation != null)
+                        LiveMapPin(
+                          point: _driverLocation!,
+                          color: const Color(0xFFD6336C),
+                          icon: Icons.directions_car,
+                        ),
                     ],
                   );
                 },

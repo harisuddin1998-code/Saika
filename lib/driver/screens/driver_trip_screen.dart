@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/ride_request.dart';
 import '../../screens/sos_screen.dart';
@@ -28,6 +31,7 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
   late final LatLng drop;
   late final Future<List<LatLng>> _routeFuture;
   bool _arrivedAtPickup = false;
+  Timer? _locationTimer;
 
   @override
   void initState() {
@@ -35,6 +39,49 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
     pickup = LatLng(widget.request.pickupLat, widget.request.pickupLng);
     drop = LatLng(widget.request.dropLat, widget.request.dropLng);
     _routeFuture = fetchRoadRoute(pickup, drop);
+    _startSharingLocation();
+  }
+
+  Future<void> _startSharingLocation() async {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return;
+    }
+    if (!await Geolocator.isLocationServiceEnabled()) return;
+
+    Future<void> pushLocation() async {
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
+        );
+        RealtimeService.instance.send('driver_location', {
+          'requestId': widget.request.id,
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+        });
+      } catch (_) {
+        // Best-effort — a missed update just means the rider's map is
+        // briefly stale, not worth surfacing an error for.
+      }
+    }
+
+    await pushLocation();
+    _locationTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => pushLocation(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _markArrived() async {
