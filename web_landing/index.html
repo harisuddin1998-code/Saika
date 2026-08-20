@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Saika</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 0%, #3a1f34 0%, #241322 60%);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #fceef3;
+      padding: 24px 0;
+    }
+    .card {
+      max-width: 420px;
+      width: 90%;
+      text-align: center;
+    }
+    h1 {
+      font-size: 2.1rem;
+      font-family: Georgia, serif;
+      letter-spacing: 0.02em;
+      margin-bottom: 0.3rem;
+      background: linear-gradient(90deg, #e85d97, #e8b04b);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    p.sub {
+      color: #cfa9bb;
+      font-size: 0.9rem;
+      margin-bottom: 1.6rem;
+    }
+    .panel {
+      background: #32192e;
+      border: 1px solid #4a2c42;
+      border-radius: 16px;
+      padding: 20px;
+      text-align: left;
+      margin-bottom: 16px;
+    }
+    .panel h2 {
+      font-size: 0.95rem;
+      margin: 0 0 12px;
+      color: #fceef3;
+      text-align: center;
+    }
+    .role-row {
+      display: flex;
+      gap: 10px;
+    }
+    .role-option {
+      flex: 1;
+      padding: 22px 10px;
+      border-radius: 12px;
+      border: 1px solid #4a2c42;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 700;
+      user-select: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .role-option:hover {
+      border-color: #e85d97;
+      background: rgba(232, 93, 151, 0.1);
+    }
+    a.app-link {
+      display: block;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      background: #3a2035;
+      border: 1px solid #4a2c42;
+      color: #fceef3;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.92rem;
+      transition: border-color 0.15s;
+    }
+    a.app-link:hover {
+      border-color: #e8b04b;
+    }
+    a.app-link span.hint {
+      display: block;
+      font-weight: 400;
+      font-size: 0.75rem;
+      color: #cfa9bb;
+      margin-top: 3px;
+    }
+    .back {
+      display: inline-block;
+      margin-bottom: 14px;
+      color: #cfa9bb;
+      font-size: 0.82rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    #downloads { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Saika</h1>
+    <p class="sub">"Safar jo maa, behn ke saath ho" — women-only EV ride pilot</p>
+
+    <div class="panel" id="rolePanel">
+      <h2>I am a</h2>
+      <div class="role-row">
+        <div class="role-option" data-role="driver">Driver</div>
+        <div class="role-option" data-role="rider">Passenger</div>
+      </div>
+    </div>
+
+    <div id="downloads">
+      <span class="back" id="backLink">‹ Choose again</span>
+      <a class="app-link" id="apkLink" href="#">
+        Download APK<span class="hint" id="apkHint"></span>
+      </a>
+      <a class="app-link" id="webLink" href="#">
+        Open web version instead<span class="hint">No install needed, runs in your browser</span>
+      </a>
+    </div>
+
+    <a class="app-link" href="admin/">
+      Admin / Control room<span class="hint">Live overview &amp; SOS queue</span>
+    </a>
+  </div>
+
+  <script>
+    const APK_URLS = {
+      rider: "https://github.com/harisuddin1998-code/Saika/releases/download/apk-v1/saika-rider.apk",
+      driver: "https://github.com/harisuddin1998-code/Saika/releases/download/apk-v1/saika-driver.apk",
+    };
+    const WEB_URLS = { rider: "rider/", driver: "driver/" };
+
+    function showDownloads(role) {
+      document.getElementById("rolePanel").style.display = "none";
+      document.getElementById("downloads").style.display = "block";
+      document.getElementById("apkLink").href = APK_URLS[role];
+      document.getElementById("apkHint").textContent =
+        role === "driver" ? "Driver app · Android APK" : "Passenger app · Android APK";
+      document.getElementById("webLink").href = WEB_URLS[role];
+    }
+
+    document.querySelectorAll(".role-option").forEach((el) => {
+      el.addEventListener("click", () => showDownloads(el.dataset.role));
+    });
+
+    document.getElementById("backLink").addEventListener("click", () => {
+      document.getElementById("downloads").style.display = "none";
+      document.getElementById("rolePanel").style.display = "block";
+    });
+  </script>
+</body>
+</html>

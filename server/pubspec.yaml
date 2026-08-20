@@ -1,0 +1,8 @@
+name: saika_server
+description: Local realtime relay for the Saika demo — broadcasts ride requests, offers, and SOS events between the rider, driver, and admin apps. No external accounts or cloud services required.
+publish_to: 'none'
+
+environment:
+  sdk: ^3.0.0
+dependencies:
+  qr: ^4.0.0
