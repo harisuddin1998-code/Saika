@@ -11,6 +11,7 @@ import '../services/route_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_map.dart';
 import '../widgets/sos_hold_button.dart';
+import 'bidding_screen.dart';
 import 'home_screen.dart';
 import 'rate_screen.dart';
 import 'sos_screen.dart';
@@ -98,7 +99,7 @@ class _TripScreenState extends State<TripScreen> {
         icon: const Icon(Icons.cancel_outlined, color: Colors.red),
         title: const Text('Ride cancelled'),
         content: Text(
-          '${widget.driver.name} has cancelled this ride. You can request another driver from home.',
+          '${widget.driver.name} has cancelled this ride. We\'ll look for another driver for you now.',
         ),
         actions: [
           TextButton(
@@ -109,12 +110,20 @@ class _TripScreenState extends State<TripScreen> {
       ),
     );
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
+    // The rider didn't choose to stop looking for a ride — the driver did —
+    // so pick up the search automatically instead of dropping them back to
+    // an empty home screen. Home stays underneath so "cancel" from the new
+    // search still has somewhere to land.
+    final navigator = Navigator.of(context);
+    navigator.pushAndRemoveUntil(
       MaterialPageRoute(
         settings: const RouteSettings(name: '/home'),
         builder: (_) => const HomeScreen(),
       ),
       (route) => false,
+    );
+    navigator.push(
+      MaterialPageRoute(builder: (_) => BiddingScreen(request: widget.request)),
     );
   }
 
@@ -394,14 +403,12 @@ class _TripScreenState extends State<TripScreen> {
                 ),
                 child: const Text('View Trusted Circle'),
               ),
-              if (!_driverArrived) ...[
-                const SizedBox(height: 6),
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: p.sos),
-                  onPressed: _cancelRide,
-                  child: const Text('Cancel ride'),
-                ),
-              ],
+              const SizedBox(height: 6),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(foregroundColor: p.sos),
+                onPressed: _cancelRide,
+                child: const Text('Cancel ride'),
+              ),
               const Spacer(),
               SosHoldButton(
                 onTriggered: () {

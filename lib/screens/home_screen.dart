@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/active_trip.dart';
 import '../models/ride_request.dart';
 import '../models/rider_identity.dart';
 import '../services/fare_calculator.dart';
+import '../services/geocode_service.dart';
 import '../services/realtime_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/saika_wallpaper.dart';
@@ -12,6 +14,12 @@ import 'app_drawer.dart';
 import 'bidding_screen.dart';
 import 'saved_locations_screen.dart';
 import 'trip_screen.dart';
+
+/// Fallback map center used only until the rider's real location resolves
+/// (or if they deny location permission) — a rough geographic center of
+/// Pakistan, not any specific city, so the app doesn't quietly assume every
+/// rider is in Karachi.
+const _fallbackCenter = LatLng(30.3753, 69.3451);
 
 class _RideTypeMeta {
   final String label;
@@ -60,10 +68,17 @@ class _HomeScreenState extends State<HomeScreen>
   PaymentMethod _paymentMethod = PaymentMethod.cash;
   String _driverPreference = 'female';
 
-  String _pickupAddress = 'Clifton Block 2, Karachi';
-  LatLng _pickupPoint = KarachiPoints.clifton;
-  String _dropAddress = 'Dolmen Mall, Tariq Road';
-  LatLng _dropPoint = KarachiPoints.tariqRoad;
+  static const _dropPlaceholder = 'Choose your drop-off';
+
+  String _pickupAddress = 'Detecting your location…';
+  LatLng _pickupPoint = _fallbackCenter;
+  String _dropAddress = _dropPlaceholder;
+  LatLng _dropPoint = _fallbackCenter;
+  bool _pickupSet = false;
+  bool _dropSet = false;
+  bool _locating = false;
+
+  bool get _readyToSearch => _pickupSet && _dropSet;
 
   late double _distanceKm = _computeDistance();
   late int _price = FareCalculator.fareFor(_distanceKm, _rideType);
@@ -72,6 +87,60 @@ class _HomeScreenState extends State<HomeScreen>
       const Distance().as(LengthUnit.Kilometer, _pickupPoint, _dropPoint);
 
   int get _minPrice => FareCalculator.minFareFor(_distanceKm, _rideType);
+
+  @override
+  void initState() {
+    super.initState();
+    _useCurrentLocationForPickup(silent: true);
+  }
+
+  Future<void> _useCurrentLocationForPickup({bool silent = false}) async {
+    setState(() => _locating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever ||
+          !await Geolocator.isLocationServiceEnabled()) {
+        if (!mounted) return;
+        setState(() {
+          if (_pickupAddress == 'Detecting your location…') {
+            _pickupAddress = 'Set your pickup location';
+          }
+        });
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Turn on location permission to find you on the map.'),
+            ),
+          );
+        }
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      final point = LatLng(pos.latitude, pos.longitude);
+      final address = await reverseGeocode(point);
+      if (!mounted) return;
+      setState(() {
+        _pickupPoint = point;
+        _pickupAddress = address;
+        _pickupSet = true;
+        _distanceKm = _computeDistance();
+        _price = FareCalculator.fareFor(_distanceKm, _rideType);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      if (_pickupAddress == 'Detecting your location…') {
+        setState(() => _pickupAddress = 'Set your pickup location');
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
 
   void _adjust(int delta) {
     setState(() => _price = (_price + delta).clamp(_minPrice, 5000));
@@ -87,7 +156,10 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _pickLocation(String fieldLabel) async {
     final result = await Navigator.of(context).push<LocationPickResult>(
       MaterialPageRoute(
-        builder: (_) => SavedLocationsScreen(fieldLabel: fieldLabel),
+        builder: (_) => SavedLocationsScreen(
+          fieldLabel: fieldLabel,
+          initialCenter: _pickupSet ? _pickupPoint : _fallbackCenter,
+        ),
       ),
     );
     if (result == null) return;
@@ -95,9 +167,11 @@ class _HomeScreenState extends State<HomeScreen>
       if (fieldLabel == 'PICKUP') {
         _pickupAddress = result.address;
         _pickupPoint = result.point;
+        _pickupSet = true;
       } else {
         _dropAddress = result.address;
         _dropPoint = result.point;
+        _dropSet = true;
       }
       _distanceKm = _computeDistance();
       _price = FareCalculator.fareFor(_distanceKm, _rideType);
@@ -224,6 +298,7 @@ class _HomeScreenState extends State<HomeScreen>
                             height: 190,
                             center: _pickupPoint,
                             zoom: 13.5,
+                            followCenter: true,
                             pins: [
                               LiveMapPin(
                                 point: _pickupPoint,
@@ -244,6 +319,14 @@ class _HomeScreenState extends State<HomeScreen>
                               builder: (context) => _MenuButton(
                                 onTap: () => Scaffold.of(context).openDrawer(),
                               ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 10,
+                            bottom: 10,
+                            child: _LocateButton(
+                              locating: _locating,
+                              onTap: () => _useCurrentLocationForPickup(),
                             ),
                           ),
                         ],
@@ -431,8 +514,10 @@ class _HomeScreenState extends State<HomeScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 14),
           child: FilledButton(
-            onPressed: _findDrivers,
-            child: const Text('Find a Driver'),
+            onPressed: _readyToSearch ? _findDrivers : null,
+            child: Text(
+              _readyToSearch ? 'Find a Driver' : 'Set pickup & drop-off first',
+            ),
           ),
         ),
       ],
@@ -688,6 +773,39 @@ class _MenuButton extends StatelessWidget {
         child: const Padding(
           padding: EdgeInsets.all(10),
           child: Icon(Icons.menu, size: 20, color: Colors.black87),
+        ),
+      ),
+    );
+  }
+}
+
+class _LocateButton extends StatelessWidget {
+  final bool locating;
+  final VoidCallback onTap;
+  const _LocateButton({required this.locating, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Theme.of(context).extension<AppPalette>()!;
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: locating ? null : onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: locating
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: p.accent,
+                  ),
+                )
+              : Icon(Icons.my_location, size: 20, color: p.accent),
         ),
       ),
     );

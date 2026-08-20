@@ -51,20 +51,37 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
       if (event.type != 'ride_cancelled') return;
       if (event.payload['requestId'] != widget.request.id) return;
       if (event.payload['cancelledBy'] != 'rider' || !mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${request.riderName} cancelled this ride.')),
-      );
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          settings: const RouteSettings(name: '/driver_home'),
-          builder: (_) => const DriverHomeScreen(),
-        ),
-        (route) => false,
-      );
+      _handleRiderCancelled();
     });
   }
 
   RideRequest get request => widget.request;
+
+  Future<void> _handleRiderCancelled() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+        title: const Text('Ride cancelled'),
+        content: Text('${request.riderName} has cancelled this ride.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        settings: const RouteSettings(name: '/driver_home'),
+        builder: (_) => const DriverHomeScreen(),
+      ),
+      (route) => false,
+    );
+  }
 
   Future<void> _startSharingLocation() async {
     var permission = await Geolocator.checkPermission();
@@ -388,14 +405,12 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
                       : 'Navigate to passenger',
                 ),
               ),
-              if (!_arrivedAtPickup) ...[
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: p.sos),
-                  onPressed: _cancelTrip,
-                  child: const Text('Cancel trip'),
-                ),
-              ],
+              const SizedBox(height: 8),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(foregroundColor: p.sos),
+                onPressed: _cancelTrip,
+                child: const Text('Cancel trip'),
+              ),
               const Spacer(),
               SosHoldButton(
                 onTriggered: () {

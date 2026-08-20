@@ -15,7 +15,12 @@ class LocationPickResult {
 
 class SavedLocationsScreen extends StatefulWidget {
   final String fieldLabel;
-  const SavedLocationsScreen({super.key, required this.fieldLabel});
+  final LatLng initialCenter;
+  const SavedLocationsScreen({
+    super.key,
+    required this.fieldLabel,
+    required this.initialCenter,
+  });
 
   @override
   State<SavedLocationsScreen> createState() => _SavedLocationsScreenState();
@@ -58,7 +63,7 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
   Future<void> _pickFromMap() async {
     final result = await Navigator.of(context).push<LocationPickResult>(
       MaterialPageRoute(
-        builder: (_) => MapPickerScreen(initialCenter: savedPlaces.first.point),
+        builder: (_) => MapPickerScreen(initialCenter: widget.initialCenter),
       ),
     );
     if (result != null && mounted) Navigator.of(context).pop(result);
@@ -228,7 +233,15 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
                 ),
               ),
               Expanded(
-                child: ListView.separated(
+                child: savedPlaces.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No saved places yet — search above or pick from the map.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: p.muted, fontSize: 12.5),
+                        ),
+                      )
+                    : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   itemCount: savedPlaces.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -292,7 +305,7 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
                       ),
                     );
                   },
-                ),
+                      ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
