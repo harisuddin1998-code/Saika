@@ -70,7 +70,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       style: TextStyle(fontFamily: 'serif', fontStyle: FontStyle.italic, fontSize: 16, color: p.inkDim),
                     ),
                     const SizedBox(height: 8),
-                    Text('Women drivers. Electric cars. Karachi, Sindh.', style: TextStyle(fontSize: 12.5, color: p.muted)),
+                    Text('Women drivers. Electric cars. All over Pakistan.', style: TextStyle(fontSize: 12.5, color: p.muted)),
                     const SizedBox(height: 44),
                     FilledButton(
                       onPressed: _ready ? _continue : null,
@@ -84,6 +84,13 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Text(
+                'Design with precision by Origin Solutions',
+                style: TextStyle(fontSize: 10.5, color: p.muted),
               ),
             ),
             const SaikaBand(),

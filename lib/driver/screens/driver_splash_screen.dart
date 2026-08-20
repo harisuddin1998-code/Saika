@@ -69,7 +69,7 @@ class _DriverSplashScreenState extends State<DriverSplashScreen> {
                     const SizedBox(height: 14),
                     Text('Drive on your terms. Earn on your price.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: p.muted)),
                     const SizedBox(height: 8),
-                    Text('Karachi, Sindh', style: TextStyle(fontSize: 11.5, color: p.muted)),
+                    Text('All over Pakistan', style: TextStyle(fontSize: 11.5, color: p.muted)),
                     const SizedBox(height: 44),
                     FilledButton(
                       style: FilledButton.styleFrom(backgroundColor: p.safe, foregroundColor: p.safeInk),
@@ -84,6 +84,13 @@ class _DriverSplashScreenState extends State<DriverSplashScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Text(
+                'Design with precision by Origin Solutions',
+                style: TextStyle(fontSize: 10.5, color: p.muted),
               ),
             ),
             const SaikaBand(),

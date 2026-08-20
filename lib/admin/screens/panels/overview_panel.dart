@@ -93,7 +93,7 @@ class _OverviewPanelState extends State<OverviewPanel> {
             ],
           ),
           const SizedBox(height: 4),
-          Text('Karachi pilot zone · live from the realtime relay', style: TextStyle(fontSize: 12.5, color: p.muted)),
+          Text('Pakistan-wide pilot · live from the realtime relay', style: TextStyle(fontSize: 12.5, color: p.muted)),
           const SizedBox(height: 20),
           Wrap(
             spacing: 14,
